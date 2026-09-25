@@ -238,6 +238,50 @@ export default function App() {
     }
   };
 
+  // Pause task
+  const handlePauseTask = async (id: string) => {
+    try {
+      await api.pauseTask(id);
+      setActiveTasks(prev => prev.map(t => t.id === id ? { ...t, status: 'paused', speed: 'Paused' } : t));
+      showToast('Download paused (স্টপ করা হয়েছে)', 'info');
+    } catch (e: any) {
+      showToast(e.message, 'error');
+    }
+  };
+
+  // Resume task
+  const handleResumeTask = async (id: string) => {
+    try {
+      await api.resumeTask(id);
+      setActiveTasks(prev => prev.map(t => t.id === id ? { ...t, status: 'downloading', speed: 'Resuming...' } : t));
+      showToast('Download resumed (চালু করা হয়েছে)', 'success');
+    } catch (e: any) {
+      showToast(e.message, 'error');
+    }
+  };
+
+  // Retry task
+  const handleRetryTask = async (id: string) => {
+    try {
+      await api.retryTask(id);
+      setActiveTasks(prev => prev.map(t => t.id === id ? { ...t, status: 'downloading', progress: 0, error: undefined } : t));
+      showToast('Retrying download...', 'info');
+    } catch (e: any) {
+      showToast(e.message, 'error');
+    }
+  };
+
+  // Delete task completely
+  const handleDeleteTask = async (id: string) => {
+    try {
+      await api.deleteTask(id);
+      setActiveTasks(prev => prev.filter(t => t.id !== id));
+      showToast('Download removed and deleted', 'info');
+    } catch (e: any) {
+      showToast(e.message, 'error');
+    }
+  };
+
   // Delete history item
   const handleDeleteHistory = async (id: string) => {
     try {
@@ -337,6 +381,10 @@ export default function App() {
               tasks={activeTasks}
               settings={settings}
               onCancelTask={handleCancelTask}
+              onPauseTask={handlePauseTask}
+              onResumeTask={handleResumeTask}
+              onRetryTask={handleRetryTask}
+              onDeleteTask={handleDeleteTask}
               onPlayMedia={(fn, title) => setMediaPlayer({ filename: fn, title })}
             />
 
@@ -389,7 +437,21 @@ export default function App() {
 
         {/* TAB 2: DOWNLOADS LIBRARY */}
         {activeTab === 'downloads' && (
-          <div className="animate-fade-in">
+          <div className="space-y-8 animate-fade-in">
+            {/* Active and Queued Downloads */}
+            {activeTasks.length > 0 && (
+              <ActiveDownloads
+                tasks={activeTasks}
+                settings={settings}
+                onCancelTask={handleCancelTask}
+                onPauseTask={handlePauseTask}
+                onResumeTask={handleResumeTask}
+                onRetryTask={handleRetryTask}
+                onDeleteTask={handleDeleteTask}
+                onPlayMedia={(fn, title) => setMediaPlayer({ filename: fn, title })}
+              />
+            )}
+
             <HistoryPage
               history={history}
               settings={settings}

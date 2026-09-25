@@ -49,7 +49,7 @@ export interface DownloadTaskItem {
   url: string;
   title: string;
   thumbnail?: string;
-  status: 'pending' | 'downloading' | 'processing' | 'completed' | 'error' | 'cancelled';
+  status: 'pending' | 'downloading' | 'processing' | 'paused' | 'completed' | 'error' | 'cancelled';
   progress: number;
   speed: string;
   eta: string;
@@ -61,6 +61,8 @@ export interface DownloadTaskItem {
   format?: string;
   type: 'video' | 'audio' | 'thumbnail' | 'comments' | 'batch';
   createdAt: string;
+  spawnArgs?: string[];
+  options?: any;
 }
 
 export interface DownloadHistoryItem {

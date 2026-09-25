@@ -85,7 +85,7 @@ interface DownloadTask {
   url: string;
   title: string;
   thumbnail?: string;
-  status: 'pending' | 'downloading' | 'processing' | 'completed' | 'error' | 'cancelled';
+  status: 'pending' | 'downloading' | 'processing' | 'paused' | 'completed' | 'error' | 'cancelled';
   progress: number;
   speed: string;
   eta: string;
@@ -99,6 +99,8 @@ interface DownloadTask {
   type: 'video' | 'audio' | 'thumbnail' | 'comments' | 'batch';
   createdAt: string;
   process?: any;
+  spawnArgs?: string[];
+  options?: any;
 }
 
 const activeTasks = new Map<string, DownloadTask>();
@@ -428,15 +430,36 @@ app.post('/api/download', async (req: Request, res: Response) => {
   args.push('-o', outputTemplate);
   args.push(url.trim());
 
+  task.spawnArgs = args;
+  task.options = { ...req.body };
+
+  executeDownloadTask(task);
+
+  res.json({
+    success: true,
+    taskId,
+    task
+  });
+});
+
+function executeDownloadTask(task: DownloadTask) {
+  const args = [...(task.spawnArgs || [])];
+  if (!args.includes('--continue')) {
+    args.unshift('--continue');
+  }
+
   // Spawn process
   const child = spawn('yt-dlp', args);
   task.process = child;
   task.status = 'downloading';
+  task.error = undefined;
   notifyTaskUpdate(task);
 
   let downloadedFile = '';
 
   child.stdout.on('data', (chunk) => {
+    if (task.status === 'paused' || task.status === 'cancelled') return;
+
     const text = chunk.toString();
 
     // Check for destination/output file
@@ -448,7 +471,6 @@ app.post('/api/download', async (req: Request, res: Response) => {
     }
 
     // Check for progress
-    // [download]  45.2% of  12.34MiB at  2.45MiB/s ETA 00:05
     const progressMatch = text.match(/\[download\]\s+([\d\.]+)%\s+of\s+~?([\d\.]+)(\w+)\s+at\s+([\d\.]+\w+\/s)\s+ETA\s+([\d:]+)/);
     if (progressMatch) {
       task.progress = parseFloat(progressMatch[1]);
@@ -479,9 +501,13 @@ app.post('/api/download', async (req: Request, res: Response) => {
 
   child.on('close', (code) => {
     // Clean up temporary cookie file if created
-    const tempCookie = path.join(DATA_DIR, `temp_cookie_${taskId}.txt`);
+    const tempCookie = path.join(DATA_DIR, `temp_cookie_${task.id}.txt`);
     if (fs.existsSync(tempCookie)) {
       try { fs.unlinkSync(tempCookie); } catch {}
+    }
+
+    if (task.status === 'paused' || task.status === 'cancelled') {
+      return;
     }
 
     if (code === 0) {
@@ -493,7 +519,6 @@ app.post('/api/download', async (req: Request, res: Response) => {
       // Scan downloads dir to find the file if not captured
       if (!task.filename) {
         const files = fs.readdirSync(DOWNLOADS_DIR);
-        // Find most recently created file in downloads
         const latest = files
           .map(f => ({ name: f, time: fs.statSync(path.join(DOWNLOADS_DIR, f)).mtimeMs }))
           .sort((a, b) => b.time - a.time)[0];
@@ -510,7 +535,9 @@ app.post('/api/download', async (req: Request, res: Response) => {
         if (task.outputPath && fs.existsSync(task.outputPath)) {
           fileSize = fs.statSync(task.outputPath).size;
         }
-        history.unshift({
+        // Avoid duplicate in history
+        const existingIdx = history.findIndex((h: any) => h.id === task.id || (task.filename && h.filename === task.filename));
+        const historyEntry = {
           id: task.id,
           title: task.title,
           url: task.url,
@@ -521,25 +548,89 @@ app.post('/api/download', async (req: Request, res: Response) => {
           format: task.format,
           thumbnail: task.thumbnail,
           date: new Date().toISOString()
-        });
+        };
+
+        if (existingIdx !== -1) {
+          history[existingIdx] = historyEntry;
+        } else {
+          history.unshift(historyEntry);
+        }
         fs.writeFileSync(HISTORY_FILE, JSON.stringify(history.slice(0, 200), null, 2), 'utf-8');
       } catch (e) {
         console.error('Failed to update history', e);
       }
     } else {
-      if (task.status !== 'cancelled') {
-        task.status = 'error';
-        task.error = task.error || `Process exited with code ${code}`;
-      }
+      task.status = 'error';
+      task.error = task.error || `Process exited with code ${code}`;
     }
     notifyTaskUpdate(task);
   });
+}
 
-  res.json({
-    success: true,
-    taskId,
-    task
-  });
+// Pause task
+app.post('/api/pause/:taskId', (req: Request, res: Response) => {
+  const task = activeTasks.get(req.params.taskId);
+  if (task) {
+    task.status = 'paused';
+    task.speed = 'Paused';
+    if (task.process) {
+      try {
+        task.process.kill('SIGTERM');
+      } catch {}
+    }
+    notifyTaskUpdate(task);
+    res.json({ success: true, task });
+  } else {
+    res.status(404).json({ error: 'Task not found' });
+  }
+});
+
+// Resume task
+app.post('/api/resume/:taskId', (req: Request, res: Response) => {
+  const task = activeTasks.get(req.params.taskId);
+  if (task) {
+    executeDownloadTask(task);
+    res.json({ success: true, task });
+  } else {
+    res.status(404).json({ error: 'Task not found' });
+  }
+});
+
+// Retry task
+app.post('/api/retry/:taskId', (req: Request, res: Response) => {
+  const task = activeTasks.get(req.params.taskId);
+  if (task) {
+    task.progress = 0;
+    executeDownloadTask(task);
+    res.json({ success: true, task });
+  } else {
+    res.status(404).json({ error: 'Task not found' });
+  }
+});
+
+// Delete task from active tasks and disk
+app.post('/api/delete-task/:taskId', (req: Request, res: Response) => {
+  const { taskId } = req.params;
+  const task = activeTasks.get(taskId);
+  if (task) {
+    if (task.process) {
+      try { task.process.kill(); } catch {}
+    }
+    if (task.outputPath && fs.existsSync(task.outputPath)) {
+      try { fs.unlinkSync(task.outputPath); } catch {}
+    }
+    // Delete partial files
+    if (task.filename) {
+      const partFile = path.join(DOWNLOADS_DIR, `${task.filename}.part`);
+      const ytdlFile = path.join(DOWNLOADS_DIR, `${task.filename}.ytdl`);
+      if (fs.existsSync(partFile)) try { fs.unlinkSync(partFile); } catch {}
+      if (fs.existsSync(ytdlFile)) try { fs.unlinkSync(ytdlFile); } catch {}
+    }
+    activeTasks.delete(taskId);
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'Task not found' });
+  }
 });
 
 // SSE endpoint for real-time progress

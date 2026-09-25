@@ -77,6 +77,26 @@ export const api = {
     await fetch(`/api/cancel/${taskId}`, { method: 'POST' });
   },
 
+  // Pause task
+  async pauseTask(taskId: string): Promise<void> {
+    await fetch(`/api/pause/${taskId}`, { method: 'POST' });
+  },
+
+  // Resume task
+  async resumeTask(taskId: string): Promise<void> {
+    await fetch(`/api/resume/${taskId}`, { method: 'POST' });
+  },
+
+  // Retry task
+  async retryTask(taskId: string): Promise<void> {
+    await fetch(`/api/retry/${taskId}`, { method: 'POST' });
+  },
+
+  // Delete task
+  async deleteTask(taskId: string): Promise<void> {
+    await fetch(`/api/delete-task/${taskId}`, { method: 'POST' });
+  },
+
   // Get active tasks
   async getActiveTasks(): Promise<DownloadTaskItem[]> {
     const res = await fetch('/api/tasks');
