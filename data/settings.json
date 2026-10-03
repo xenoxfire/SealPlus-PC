@@ -1,0 +1,16 @@
+{
+  "downloadDir": "/app/applet/downloads",
+  "defaultVideoFormat": "mp4",
+  "defaultAudioFormat": "mp3",
+  "defaultQuality": "1080p",
+  "maxConcurrentDownloads": 3,
+  "embedThumbnail": true,
+  "embedMetadata": true,
+  "subtitles": false,
+  "subtitleLangs": "en,bn,es",
+  "theme": "blue",
+  "darkMode": "dark",
+  "glassEffect": true,
+  "securityPin": "",
+  "isPinLocked": false
+}

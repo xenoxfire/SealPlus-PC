@@ -1,0 +1,6 @@
+{
+  "name": "Seal Plus PC - Video & Audio Downloader",
+  "description": "Desktop & Web edition of Seal Plus powered by yt-dlp with Material You design, format selector, batch download, thumbnail & comment tools, and custom templates.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

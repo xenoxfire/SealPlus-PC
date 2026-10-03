@@ -1,0 +1,32 @@
+[
+  {
+    "id": "1",
+    "name": "Extract Best MP3 Audio",
+    "command": "-x --audio-format mp3 --audio-quality 0",
+    "desc": "Converts audio to highest quality MP3 with metadata"
+  },
+  {
+    "id": "2",
+    "name": "Embed Thumbnail & Metadata",
+    "command": "--embed-thumbnail --add-metadata",
+    "desc": "Embeds video thumbnail and ID3/MP4 tags"
+  },
+  {
+    "id": "3",
+    "name": "1080p Maximum Quality",
+    "command": "-f \"bestvideo[height<=1080]+bestaudio/best[height<=1080]\" --merge-output-format mp4",
+    "desc": "Caps video resolution at 1080p Full HD"
+  },
+  {
+    "id": "4",
+    "name": "Bypass Geo-Restriction",
+    "command": "--geo-bypass",
+    "desc": "Bypasses geographical viewing restrictions"
+  },
+  {
+    "id": "5",
+    "name": "SponsorBlock Audio/Video",
+    "command": "--sponsorblock-remove all",
+    "desc": "Removes sponsor segments using SponsorBlock API"
+  }
+]
