@@ -20,9 +20,11 @@ import {
   ChevronDown,
   ChevronUp,
   Folder,
+  FolderPlus,
   Edit3
 } from 'lucide-react';
 import { VideoMetadata, CommandTemplate, CookieProfile, AppSettings } from '../types/seal';
+import { FolderPickerModal } from './FolderPickerModal';
 
 interface FormatDialogProps {
   metadata: VideoMetadata;
@@ -83,9 +85,13 @@ export const FormatDialog: React.FC<FormatDialogProps> = ({
   const [selectedCookieProfileId, setSelectedCookieProfileId] = useState<string>('');
   
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
-  const [isEditingFolder, setIsEditingFolder] = useState<boolean>(false);
-  const [folderPathInput, setFolderPathInput] = useState<string>(settings.downloadDir || '/app/applet/downloads');
+  const [isFolderPickerOpen, setIsFolderPickerOpen] = useState<boolean>(false);
   const [folderSaved, setFolderSaved] = useState<boolean>(false);
+
+  // Multi-tier thumbnail fallback
+  const initialThumb = metadata.thumbnail || (metadata.id ? `https://i.ytimg.com/vi/${metadata.id}/hqdefault.jpg` : '');
+  const [currentThumb, setCurrentThumb] = useState<string>(initialThumb);
+  const [thumbErrorCount, setThumbErrorCount] = useState<number>(0);
 
   // Available video resolutions from metadata
   const standardResolutions = [
@@ -120,17 +126,6 @@ export const FormatDialog: React.FC<FormatDialogProps> = ({
       setCustomCommand(tmpl.command);
       setMode('custom');
     }
-  };
-
-  const handleSaveFolder = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!folderPathInput.trim()) return;
-    if (onUpdateSettings) {
-      onUpdateSettings({ downloadDir: folderPathInput.trim() });
-    }
-    setIsEditingFolder(false);
-    setFolderSaved(true);
-    setTimeout(() => setFolderSaved(false), 2500);
   };
 
   const handleStart = () => {
@@ -185,11 +180,24 @@ export const FormatDialog: React.FC<FormatDialogProps> = ({
         {/* Video Preview Card */}
         <div className="p-4 sm:p-6 bg-slate-950/40 border-b border-slate-800/80">
           <div className="flex flex-col sm:flex-row gap-4 items-start">
-            {metadata.thumbnail && (
+            {currentThumb ? (
               <div className="relative w-full sm:w-44 aspect-video rounded-xl overflow-hidden bg-slate-800 shrink-0 border border-slate-700/60 shadow">
                 <img
-                  src={metadata.thumbnail}
+                  src={currentThumb}
                   alt={metadata.title}
+                  referrerPolicy="no-referrer"
+                  onError={() => {
+                    if (thumbErrorCount === 0 && metadata.id) {
+                      setThumbErrorCount(1);
+                      setCurrentThumb(`https://i.ytimg.com/vi/${metadata.id}/hqdefault.jpg`);
+                    } else if (thumbErrorCount === 1 && metadata.id) {
+                      setThumbErrorCount(2);
+                      setCurrentThumb(`https://i.ytimg.com/vi/${metadata.id}/mqdefault.jpg`);
+                    } else if (thumbErrorCount === 2 && currentThumb) {
+                      setThumbErrorCount(3);
+                      setCurrentThumb(`/api/thumbnail-proxy?url=${encodeURIComponent(currentThumb)}`);
+                    }
+                  }}
                   className="w-full h-full object-cover"
                 />
                 {metadata.duration_string && (
@@ -198,7 +206,7 @@ export const FormatDialog: React.FC<FormatDialogProps> = ({
                   </span>
                 )}
               </div>
-            )}
+            ) : null}
 
             <div className="flex-1 min-w-0 space-y-1.5">
               <h4 className="text-sm sm:text-base font-semibold text-white line-clamp-2 leading-snug">
@@ -553,49 +561,35 @@ export const FormatDialog: React.FC<FormatDialogProps> = ({
               </div>
             )}
           </div>
-          {/* Save Folder Location Bar */}
-          <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs space-y-2">
+          {/* Save Folder Location Bar with Clickable Dialog */}
+          <div 
+            onClick={() => setIsFolderPickerOpen(true)}
+            className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-amber-400/50 transition-all cursor-pointer group text-xs space-y-1.5"
+            title="Click to select PC folder"
+          >
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
               <div className="flex items-center space-x-2">
                 <Folder className="w-4 h-4 text-amber-400 shrink-0" />
                 <span className="font-semibold text-slate-300">Save Location:</span>
-                {!isEditingFolder && (
-                  <span className="font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800 text-[11px] truncate max-w-xs">
-                    {settings.downloadDir || '/app/applet/downloads'}
-                  </span>
-                )}
+                <span className="font-mono text-amber-300 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800 text-[11px] truncate max-w-xs font-medium">
+                  {settings.downloadDir || 'Downloads'}
+                </span>
               </div>
               <button
                 type="button"
-                onClick={() => setIsEditingFolder(!isEditingFolder)}
-                className="text-sky-400 hover:text-sky-300 font-semibold flex items-center space-x-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsFolderPickerOpen(true);
+                }}
+                className="px-3 py-1 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 font-bold flex items-center space-x-1 shrink-0 transition-all text-xs"
               >
-                <Edit3 className="w-3 h-3" />
-                <span>{isEditingFolder ? 'Cancel' : 'Change Folder (স্থায়ীভাবে)'}</span>
+                <FolderPlus className="w-3.5 h-3.5" />
+                <span>Select Folder (পিসির ফোল্ডার খুলুন)</span>
               </button>
             </div>
 
-            {isEditingFolder && (
-              <form onSubmit={handleSaveFolder} className="pt-1 flex gap-2">
-                <input
-                  type="text"
-                  value={folderPathInput}
-                  onChange={(e) => setFolderPathInput(e.target.value)}
-                  placeholder="e.g. C:\Downloads or /downloads"
-                  className="flex-1 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-mono text-white outline-none"
-                  required
-                />
-                <button
-                  type="submit"
-                  className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shrink-0"
-                >
-                  Save
-                </button>
-              </form>
-            )}
-
             {folderSaved && (
-              <p className="text-[11px] text-emerald-400 flex items-center space-x-1">
+              <p className="text-[11px] text-emerald-400 flex items-center space-x-1 animate-fade-in font-medium pt-1">
                 <Check className="w-3 h-3" />
                 <span>Download folder saved permanently!</span>
               </p>
@@ -622,6 +616,20 @@ export const FormatDialog: React.FC<FormatDialogProps> = ({
             <span>Start Download</span>
           </button>
         </div>
+
+        {/* Native PC Folder Picker Modal */}
+        <FolderPickerModal
+          currentPath={settings.downloadDir || 'Downloads'}
+          isOpen={isFolderPickerOpen}
+          onClose={() => setIsFolderPickerOpen(false)}
+          onSelectFolder={(newFolder) => {
+            if (onUpdateSettings) {
+              onUpdateSettings({ downloadDir: newFolder });
+            }
+            setFolderSaved(true);
+            setTimeout(() => setFolderSaved(false), 3000);
+          }}
+        />
 
       </div>
     </div>

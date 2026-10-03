@@ -6,17 +6,17 @@ import {
   Settings2, 
   Check, 
   Folder, 
-  Edit3, 
+  FolderPlus,
   User, 
   Eye, 
-  Clock, 
   ThumbsUp, 
   Sparkles, 
   ShieldCheck, 
   X,
-  Play
+  Laptop
 } from 'lucide-react';
 import { VideoMetadata, AppSettings } from '../types/seal';
+import { FolderPickerModal } from './FolderPickerModal';
 
 interface LiveVideoCardProps {
   metadata: VideoMetadata;
@@ -38,9 +38,13 @@ export const LiveVideoCard: React.FC<LiveVideoCardProps> = ({
   const [selectedType, setSelectedType] = useState<'video' | 'audio'>('video');
   const [selectedQuality, setSelectedQuality] = useState<string>('1080');
   const [selectedAudioFormat, setSelectedAudioFormat] = useState<string>('mp3');
-  const [isEditingFolder, setIsEditingFolder] = useState<boolean>(false);
-  const [folderPathInput, setFolderPathInput] = useState<string>(settings.downloadDir || '/app/applet/downloads');
+  const [isFolderPickerOpen, setIsFolderPickerOpen] = useState<boolean>(false);
   const [folderSaved, setFolderSaved] = useState<boolean>(false);
+
+  // Multi-tier thumbnail fallback
+  const initialThumb = metadata.thumbnail || (metadata.id ? `https://i.ytimg.com/vi/${metadata.id}/hqdefault.jpg` : '');
+  const [currentThumb, setCurrentThumb] = useState<string>(initialThumb);
+  const [thumbErrorCount, setThumbErrorCount] = useState<number>(0);
 
   // Quick video resolution options
   const videoQualities = [
@@ -59,13 +63,10 @@ export const LiveVideoCard: React.FC<LiveVideoCardProps> = ({
     { label: 'Opus (High Efficiency)', format: 'opus', quality: '160' },
   ];
 
-  const handleSaveFolder = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!folderPathInput.trim()) return;
-    onUpdateSettings({ downloadDir: folderPathInput.trim() });
-    setIsEditingFolder(false);
+  const handleSelectFolder = (newPath: string) => {
+    onUpdateSettings({ downloadDir: newPath });
     setFolderSaved(true);
-    setTimeout(() => setFolderSaved(false), 2500);
+    setTimeout(() => setFolderSaved(false), 3500);
   };
 
   const handleStartDownload = () => {
@@ -76,7 +77,7 @@ export const LiveVideoCard: React.FC<LiveVideoCardProps> = ({
     onDownload({
       url: finalUrl,
       title: metadata.title,
-      thumbnail: metadata.thumbnail,
+      thumbnail: currentThumb || metadata.thumbnail,
       mode: selectedType,
       videoQuality: selectedQuality,
       videoFormat: settings.defaultVideoFormat || 'mp4',
@@ -116,14 +117,27 @@ export const LiveVideoCard: React.FC<LiveVideoCardProps> = ({
       <div className="flex flex-col sm:flex-row gap-5 items-start">
         {/* Large Thumbnail Preview ("tamable ta show kore") */}
         <div className="relative w-full sm:w-64 aspect-video rounded-2xl overflow-hidden bg-slate-950 border border-slate-700/80 shadow-lg shrink-0 group">
-          {metadata.thumbnail ? (
+          {currentThumb ? (
             <img
-              src={metadata.thumbnail}
+              src={currentThumb}
               alt={metadata.title}
+              referrerPolicy="no-referrer"
+              onError={() => {
+                if (thumbErrorCount === 0 && metadata.id) {
+                  setThumbErrorCount(1);
+                  setCurrentThumb(`https://i.ytimg.com/vi/${metadata.id}/hqdefault.jpg`);
+                } else if (thumbErrorCount === 1 && metadata.id) {
+                  setThumbErrorCount(2);
+                  setCurrentThumb(`https://i.ytimg.com/vi/${metadata.id}/mqdefault.jpg`);
+                } else if (thumbErrorCount === 2 && currentThumb) {
+                  setThumbErrorCount(3);
+                  setCurrentThumb(`/api/thumbnail-proxy?url=${encodeURIComponent(currentThumb)}`);
+                }
+              }}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-slate-600">
+            <div className="w-full h-full flex items-center justify-center text-slate-600 bg-slate-950">
               <Video className="w-10 h-10" />
             </div>
           )}
@@ -147,7 +161,7 @@ export const LiveVideoCard: React.FC<LiveVideoCardProps> = ({
 
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
             {metadata.uploader && (
-              <span className="flex items-center space-x-1.5 text-slate-300 font-semibold">
+              <span className="flex items-center space-x-1 font-medium text-slate-300">
                 <User className="w-3.5 h-3.5 text-sky-400" />
                 <span>{metadata.uploader}</span>
               </span>
@@ -155,31 +169,32 @@ export const LiveVideoCard: React.FC<LiveVideoCardProps> = ({
 
             {metadata.view_count !== undefined && (
               <span className="flex items-center space-x-1">
-                <Eye className="w-3.5 h-3.5 text-slate-400" />
+                <Eye className="w-3.5 h-3.5 text-slate-500" />
                 <span>{metadata.view_count.toLocaleString()} views</span>
               </span>
             )}
 
             {metadata.like_count !== undefined && (
               <span className="flex items-center space-x-1">
-                <ThumbsUp className="w-3.5 h-3.5 text-slate-400" />
+                <ThumbsUp className="w-3.5 h-3.5 text-slate-500" />
                 <span>{metadata.like_count.toLocaleString()} likes</span>
               </span>
             )}
           </div>
 
-          <div className="pt-1 flex flex-wrap gap-1.5">
-            <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700/60 font-medium">
-              100% Real Video / Audio Media File
+          <div className="pt-2 flex flex-wrap gap-2">
+            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-medium flex items-center space-x-1">
+              <ShieldCheck className="w-3 h-3" />
+              <span>Full Video Ready (আসল ফাইল)</span>
             </span>
-            <span className="text-[11px] px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
-              High Speed yt-dlp Engine
+            <span className="px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20 text-xs font-medium">
+              Audio + Video Merged
             </span>
           </div>
         </div>
       </div>
 
-      {/* Quality Selection Section ("Trpr nise jano vdo quality oi system gulo ase") */}
+      {/* Quality Selection Section */}
       <div className="p-4 sm:p-5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-3.5">
         <div className="flex items-center justify-between">
           <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center space-x-1.5">
@@ -260,77 +275,78 @@ export const LiveVideoCard: React.FC<LiveVideoCardProps> = ({
         )}
       </div>
 
-      {/* Download Location Setting ("download location ta jano customis kora jai r ak br korle br br kora jano na lage") */}
-      <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+      {/* Download Location Setting with Clickable Folder Dialog */}
+      <div 
+        onClick={() => setIsFolderPickerOpen(true)}
+        className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-amber-400/50 transition-all cursor-pointer group space-y-1.5"
+        title="Click to open PC folder selector"
+      >
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-          <div className="flex items-center space-x-2 text-xs">
-            <Folder className="w-4 h-4 text-amber-400 shrink-0" />
-            <span className="font-semibold text-slate-300">Save Location (পিসিতে সেভ করার লোকেশন):</span>
-            {!isEditingFolder && (
-              <span className="font-mono text-slate-400 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800 text-[11px] truncate max-w-xs sm:max-w-md">
-                {settings.downloadDir || '/app/applet/downloads'}
+          <div className="flex items-center space-x-2.5 text-xs min-w-0">
+            <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 group-hover:scale-110 transition-transform">
+              <Folder className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <span className="font-semibold text-slate-200 block flex items-center space-x-1.5">
+                <span>Save Location (পিসির ফোল্ডার):</span>
+                <span className="text-[10px] text-amber-400 font-normal">(ক্লিক করলেই পিসির ফোল্ডার ওপেন হবে)</span>
               </span>
-            )}
+              <span className="font-mono text-amber-300 font-medium text-[11px] truncate block">
+                {settings.downloadDir || 'Downloads'}
+              </span>
+            </div>
           </div>
 
           <button
             type="button"
-            onClick={() => setIsEditingFolder(!isEditingFolder)}
-            className="text-xs font-semibold text-sky-400 hover:text-sky-300 flex items-center space-x-1 shrink-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsFolderPickerOpen(true);
+            }}
+            className="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center space-x-1.5 shrink-0 transition-all"
           >
-            <Edit3 className="w-3.5 h-3.5" />
-            <span>{isEditingFolder ? 'Cancel' : 'Change Folder (ফোল্ডার পরিবর্তন)'}</span>
+            <FolderPlus className="w-3.5 h-3.5" />
+            <span>Select Folder (পিসির ফোল্ডার খুলুন)</span>
           </button>
         </div>
 
-        {/* Change Folder Input Form */}
-        {isEditingFolder && (
-          <form onSubmit={handleSaveFolder} className="pt-2 flex flex-col sm:flex-row gap-2">
-            <input
-              type="text"
-              value={folderPathInput}
-              onChange={(e) => setFolderPathInput(e.target.value)}
-              placeholder="e.g. C:\Users\YourName\Downloads\Videos or /downloads"
-              className="flex-1 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-mono text-white outline-none focus:border-sky-500"
-              required
-            />
-            <button
-              type="submit"
-              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shrink-0"
-            >
-              Save Folder (স্থায়ীভাবে সেভ করুন)
-            </button>
-          </form>
-        )}
-
         {folderSaved && (
-          <p className="text-[11px] text-emerald-400 flex items-center space-x-1">
+          <p className="text-[11px] text-emerald-400 flex items-center space-x-1 animate-fade-in font-medium pt-1">
             <Check className="w-3.5 h-3.5" />
-            <span>Download location saved permanently! You won't need to configure it again.</span>
+            <span>ফোল্ডার স্থায়ীভাবে সেভ হয়েছে! পরবর্তী সব ডাউনলোড এই ফোল্ডারেই সেভ হবে।</span>
           </p>
         )}
       </div>
 
-      {/* Main Action Bar ("trpr download option a chilik korlei jano download suru hoye jai") */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+      {/* Bottom Action Buttons: Instant Download & Full Settings */}
+      <div className="flex flex-col sm:flex-row gap-3 pt-2">
         <button
           type="button"
-          onClick={onOpenFullModal}
-          className="text-xs text-slate-400 hover:text-white flex items-center space-x-1.5 transition-colors font-medium py-1 px-2 rounded-lg hover:bg-slate-800"
+          onClick={handleStartDownload}
+          className="flex-1 py-4 px-6 rounded-2xl bg-gradient-to-r from-sky-500 via-sky-600 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-sm sm:text-base shadow-xl shadow-sky-500/25 transition-all flex items-center justify-center space-x-2.5 group active:scale-98"
         >
-          <Settings2 className="w-3.5 h-3.5 text-sky-400" />
-          <span>Advanced Trimming, Subtitles & Custom Args...</span>
+          <Download className="w-5 h-5 group-hover:translate-y-0.5 transition-transform" />
+          <span>Download Video Now (ডাউনলোড শুরু করুন)</span>
         </button>
 
         <button
           type="button"
-          onClick={handleStartDownload}
-          className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 hover:from-sky-400 hover:to-purple-500 active:scale-95 text-white font-bold text-sm flex items-center justify-center space-x-2 shadow-xl shadow-sky-500/25 transition-all"
+          onClick={onOpenFullModal}
+          className="py-4 px-5 rounded-2xl bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-slate-300 hover:text-white text-xs sm:text-sm font-semibold transition-all flex items-center justify-center space-x-2 shrink-0"
+          title="Open advanced settings for subtitles, clipping, and custom formats"
         >
-          <Download className="w-4 h-4" />
-          <span>Download Video Now (ডাউনলোড শুরু করুন)</span>
+          <Settings2 className="w-4 h-4 text-slate-400" />
+          <span>Advanced Settings...</span>
         </button>
       </div>
+
+      {/* Native PC Folder Picker Modal */}
+      <FolderPickerModal
+        currentPath={settings.downloadDir || 'Downloads'}
+        isOpen={isFolderPickerOpen}
+        onClose={() => setIsFolderPickerOpen(false)}
+        onSelectFolder={handleSelectFolder}
+      />
 
     </div>
   );

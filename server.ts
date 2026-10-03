@@ -445,6 +445,47 @@ app.get('/api/info', async (req: Request, res: Response) => {
   });
 });
 
+// Proxy thumbnail images to bypass CORS, hotlinking and Referer blocks
+app.get('/api/thumbnail-proxy', async (req: Request, res: Response) => {
+  const imageUrl = req.query.url as string;
+  if (!imageUrl || !imageUrl.startsWith('http')) {
+    return res.status(400).send('Valid image URL is required');
+  }
+
+  try {
+    const imgRes = await fetch(imageUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+
+    if (imgRes.ok) {
+      const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      const arrayBuf = await imgRes.arrayBuffer();
+      return res.send(Buffer.from(arrayBuf));
+    }
+
+    // If failed and looks like a YouTube image, fallback to hqdefault.jpg
+    const ytMatch = imageUrl.match(/(?:vi(?:_webp)?)\/([^/]+)/);
+    if (ytMatch && ytMatch[1]) {
+      const fallbackUrl = `https://i.ytimg.com/vi/${ytMatch[1]}/hqdefault.jpg`;
+      const fbRes = await fetch(fallbackUrl);
+      if (fbRes.ok) {
+        res.setHeader('Content-Type', 'image/jpeg');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        const arrayBuf = await fbRes.arrayBuffer();
+        return res.send(Buffer.from(arrayBuf));
+      }
+    }
+
+    res.status(imgRes.status).send('Failed to fetch image');
+  } catch (error: any) {
+    res.status(500).send('Error proxying thumbnail: ' + error.message);
+  }
+});
+
 // Fetch comments
 app.get('/api/comments', (req: Request, res: Response) => {
   const url = req.query.url as string;

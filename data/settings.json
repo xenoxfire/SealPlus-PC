@@ -1,5 +1,5 @@
 {
-  "downloadDir": "/app/applet/downloads",
+  "downloadDir": "Va",
   "defaultVideoFormat": "mp4",
   "defaultAudioFormat": "mp3",
   "defaultQuality": "1080p",

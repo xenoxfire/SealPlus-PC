@@ -14,10 +14,13 @@ import {
   Layers, 
   Moon, 
   Sun,
-  Laptop
+  Laptop,
+  Folder,
+  FolderPlus
 } from 'lucide-react';
 import { AppSettings } from '../types/seal';
 import { api } from '../services/api';
+import { FolderPickerModal } from './FolderPickerModal';
 
 interface SettingsPageProps {
   settings: AppSettings;
@@ -36,6 +39,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 }) => {
   const [pinInput, setPinInput] = useState(settings.securityPin || '');
   const [pinSavedMsg, setPinSavedMsg] = useState(false);
+  const [isFolderPickerOpen, setIsFolderPickerOpen] = useState(false);
+  const [folderSaved, setFolderSaved] = useState(false);
 
   const themes: Array<{ id: AppSettings['theme']; label: string; bg: string }> = [
     { id: 'blue', label: 'Ocean Blue', bg: 'bg-blue-500' },
@@ -221,6 +226,46 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             />
           </label>
         </div>
+
+        {/* Download Location Setting */}
+        <div 
+          onClick={() => setIsFolderPickerOpen(true)}
+          className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-amber-400/50 transition-all cursor-pointer group space-y-1.5"
+          title="Click to change PC download folder"
+        >
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <div className="flex items-center space-x-2.5 text-xs min-w-0">
+              <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 group-hover:scale-110 transition-transform">
+                <Folder className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <span className="font-semibold text-slate-200 block">Default Download Location (ডিফল্ট ফোল্ডার):</span>
+                <span className="font-mono text-amber-300 font-medium text-[11px] truncate block">
+                  {settings.downloadDir || 'Downloads'}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsFolderPickerOpen(true);
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center space-x-1.5 shrink-0 transition-all"
+            >
+              <FolderPlus className="w-3.5 h-3.5" />
+              <span>Browse PC Folder (পিসির ফোল্ডার বাছুন)</span>
+            </button>
+          </div>
+
+          {folderSaved && (
+            <p className="text-[11px] text-emerald-400 flex items-center space-x-1 animate-fade-in font-medium pt-1">
+              <Check className="w-3.5 h-3.5" />
+              <span>ডাউনলোড ফোল্ডার স্থায়ীভাবে সেভ হয়েছে!</span>
+            </p>
+          )}
+        </div>
       </div>
 
       {/* 3. SECURITY & PIN LOCK */}
@@ -326,6 +371,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           </label>
         </div>
       </div>
+
+      {/* Native PC Folder Picker Modal */}
+      <FolderPickerModal
+        currentPath={settings.downloadDir || 'Downloads'}
+        isOpen={isFolderPickerOpen}
+        onClose={() => setIsFolderPickerOpen(false)}
+        onSelectFolder={(newFolder) => {
+          onUpdateSettings({ downloadDir: newFolder });
+          setFolderSaved(true);
+          setTimeout(() => setFolderSaved(false), 3000);
+        }}
+      />
 
     </div>
   );

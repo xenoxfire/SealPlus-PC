@@ -197,7 +197,18 @@ export const ActiveDownloads: React.FC<ActiveDownloadsProps> = ({
                   <div className="flex items-center space-x-3.5 min-w-0 flex-1">
                     {task.thumbnail ? (
                       <div className="w-16 h-12 rounded-xl overflow-hidden bg-slate-800 shrink-0 border border-slate-700/60 relative">
-                        <img src={task.thumbnail} alt="" className="w-full h-full object-cover" />
+                        <img 
+                          src={task.thumbnail} 
+                          alt="" 
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            if (!target.src.includes('/api/thumbnail-proxy')) {
+                              target.src = `/api/thumbnail-proxy?url=${encodeURIComponent(task.thumbnail || '')}`;
+                            }
+                          }}
+                          className="w-full h-full object-cover" 
+                        />
                         {isPaused && (
                           <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                             <Pause className="w-4 h-4 text-amber-300" />
